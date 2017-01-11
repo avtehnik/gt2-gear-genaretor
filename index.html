@@ -49,15 +49,11 @@
 
         <div>
             <label>Number Of Teeth</label>
-            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="11"/>
-        </div>
-        <div>
-            <label>diametr, mm</label>
-            <input type="number" placeholder="height" onchange="changeParam('diametr',this);" value="212"/>
+            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="52"/>
         </div>
         <div>
             <label>Teeth diametr, mm</label>
-            <input type="number" placeholder="height" onchange="changeParam('teethDiametr',this);" value="0.41"/>
+            <input type="number" placeholder="height" onchange="changeParam('teethDiametr',this);" value="0.55"/>
         </div>
         <div>
             <label>Work Speed</label>
@@ -86,10 +82,24 @@
 <script src="three.js"></script>
 
 <script>
+    var gt2Constants = {
+        '2': {
+            'grooveDepth': 0.76,
+            'pitchFactor': 0.41,
+            'pld': 0.254
+        },
+        '3': {
+            'grooveDepth': 1.14,
+            'pitchFactor': 1.27
+        },
+        '5': {
+            'grooveDepth': 1.93,
+            'pitchFactor': 1.78
+        }
+    };
 
-
-    var numberOfTeeth = 11;
-    var teethDiametr = 0.41;
+    var numberOfTeeth = 52;
+    var teethDiametr = 0.55;
     var gears = [];
     var camera, scene, renderer;
     var mesh;
@@ -154,7 +164,7 @@
         var shift = angle;
 
         while (teethInsideEdge > angle) {
-            path.push(polar(teethCenter.x, teethCenter.y, degToRad(teethInsideEdge + 90 + (oneTeethAngle / 2)), teethRadius));
+            path.push(polar(teethCenter.x, teethCenter.y, degToRad(teethInsideEdge + 90), teethRadius));
             teethInsideEdge--;
         }
 
@@ -173,9 +183,14 @@
             color: 0xFF0000
         });
 
-        var raduis = (((((teethRadius * 2) + 0.1807) * numberOfTeeth) / Math.PI)/2);
+        var pitchDiametr = (((2 * numberOfTeeth) / Math.PI) / 2) * 2;
 
-        console.log(raduis * 2);
+        var outsideDiameter = pitchDiametr - (0.254 * 2);
+
+
+        var rootDiameter = outsideDiameter - (gt2Constants['2'].grooveDepth * 2);
+
+        console.log(pitchDiametr,outsideDiameter, rootDiameter);
 
         var gear = {
             'geometry': geometry,
@@ -187,22 +202,63 @@
         };
 
         var teethInsideAngle = ((180 - ((oneTeethAngle / 2) + 90)) * 2);
+        teethInsideAngle = 180;
 
+
+        //0.366
 //        console.log(oneTeethAngle, teethInsideAngle);
         var teethCenter;
-        var teethCenter
+        var teethCenter;
+        var outsidePoint;
         for (var i = 0; i <= numberOfTeeth;) {
 
-//            teethCenter = degToRad(angle);
-//            polar(0, 0, teethCenter, 300);
-            teethCenter = polar(0, 0, degToRad(angle), raduis+0.2);
+            outsidePoint = polar(0, 0, degToRad(angle - (oneTeethAngle/2)), outsideDiameter/2);
+            gear.path.push(outsidePoint);
+
+            outsidePoint = polar(0, 0, degToRad(angle - (oneTeethAngle/3)), outsideDiameter/2);
+            gear.path.push(outsidePoint);
+
+            teethCenter = polar(0, 0, degToRad(angle), (rootDiameter/2)+(0.555));
             generateTeeth(gear.path, teethInsideAngle, teethCenter, angle, teethRadius, toolRadius, oneTeethAngle);
+
+            outsidePoint = polar(0, 0, degToRad(angle + (oneTeethAngle/3)), outsideDiameter/2);
+            gear.path.push(outsidePoint);
+
+
+//            gear.path.push(teethCenter);
+            angle += oneTeethAngle;
+            i++;
+        }
+        angle = 0;
+        for (var i = 0; i <= 360;) {
+//            polar(0, 0, teethCenter, 300);
+            teethCenter = polar(0, 0, degToRad(i), outsideDiameter/2);
 //            gear.path.push(teethCenter);
             angle += oneTeethAngle;
             i++;
         }
 
+        angle = 0;
+//        for (var i = 0; i <= 360;) {
+////            polar(0, 0, teethCenter, 300);
+//            teethCenter = polar(0, 0, degToRad(angle), pitchDiametr/2);
+//            gear.path.push(teethCenter);
+//            teethCenter = polar(0, 0, degToRad(angle), 2);
+//            gear.path.push(teethCenter);
+//            angle += oneTeethAngle;
+//            i++;
+//        }
+
 //        console.log(path);
+
+
+
+
+        for (var i = 0; i <= 360;i++) {
+
+            outsidePoint = polar(0, 0, degToRad(i), 3/2);
+            gear.path.push(outsidePoint);
+        }
 
         addPath(gear);
 //        gear.line.geometry.translate(-(width / 2), -(depth / 2), (height / 2));
@@ -214,7 +270,9 @@
 
     function init() {
 
-        camera = new THREE.PerspectiveCamera(4, window.innerWidth / window.innerHeight, 1, 1000);
+
+//        original 20.9;
+        camera = new THREE.PerspectiveCamera(10, window.innerWidth / window.innerHeight, 1, 1000);
         camera.position.z = 400;
 
         scene = new THREE.Scene();
@@ -261,16 +319,14 @@
     //    mesh.rotation.x = 2.824999999999962;
     //    mesh.rotation.y = 0.5650000000000004;
 
-    mesh.rotation.x = 3.084999999999957;
-    mesh.rotation.y = 0.4130000000000004;
+    mesh.rotation.x = degToRad(90);
+    mesh.rotation.y = 0;
 
-    //    sides.forEach(function (side) {
-    //
-    //        side.line.rotation.x = mesh.rotation.x;
-    //        side.line.rotation.y = mesh.rotation.y;
-    //
-    //
-    //    });
+
+    gears.forEach(function (gear) {
+        gear.line.rotation.x = mesh.rotation.x;
+        gear.line.rotation.y = mesh.rotation.y;
+    });
 
 
     var rotation_x = 0;
@@ -280,8 +336,9 @@
     function animate() {
 
         requestAnimationFrame(animate);
-        rotation_x += 0.005;
+//        rotation_x += 0.005;
 //        rotation_y += 0.0001;
+        rotation_x = degToRad(90);
 
 
         mesh.rotation.x = rotation_x;

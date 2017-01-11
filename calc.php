@@ -9,6 +9,7 @@ $rootDiameter= $outsideDiameter - ($nominalGrooveDepth * 2);
 $maximumFlangeSeatDiameter = $rootDiameter - $pitchFactor;
 $grooveDiameter = 1;
 
+echo 'diametr diff: '.(($pitchDiameter-$outsideDiameter)/2).'mm'.PHP_EOL;
 echo 'pitchDiameter: '.$pitchDiameter.'mm'.PHP_EOL;
 echo 'outsideDiameter: '.$outsideDiameter.'mm'.PHP_EOL;
 echo 'beltPitch: '.$beltPitch.'mm'.PHP_EOL;

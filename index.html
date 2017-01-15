@@ -49,23 +49,39 @@
 
         <div>
             <label>Number Of Teeth</label>
-            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="12"/>
+            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="29"/>
         </div>
         <div>
-            <label>Teeth diametr, mm</label>
-            <input type="number" placeholder="height" onchange="changeParam('teethDiametr',this);" value="0.55"/>
+            <label>Central hole</label>
+            <input type="number" placeholder="height" onchange="changeParam('centralHole',this);" value="3"/>
+        </div>
+        <div>
+            <label>Number of radial holes</label>
+            <input type="number" placeholder="height" onchange="changeParam('numberOfRadialRoles',this);" value="4"/>
+        </div>
+        <div>
+            <label>Radial holes diameter</label>
+            <input type="number" placeholder="height" onchange="changeParam('radialHolesdiameter',this);" value="3"/>
+        </div>
+        <div>
+            <label>Radial holes distance</label>
+            <input type="number" placeholder="height" onchange="changeParam('radialHolesDistance',this);" value="3"/>
         </div>
         <div>
             <label>Work Speed</label>
-            <input onchange="changeSize('workSpeed',this);" type="number" placeholder="Work Speed" value="150"/>
+            <input onchange="changeParam('workSpeed',this);" type="number" placeholder="Work Speed" value="150"/>
         </div>
         <div>
             <label>Speed</label>
-            <input onchange="changeSize('speed',this);" type="number" placeholder="Speed" value="400"/>
+            <input onchange="changeParam('speed',this);" type="number" placeholder="Speed" value="400"/>
+        </div>
+        <div>
+            <label>Offset</label>
+            <input onchange="changeParam('offset',this);" type="number" placeholder="Speed" value="400"/>
         </div>
         <div>
             <label>Laser Power</label>
-            <input onchange="changeSize('laserPower',this);" type="number" placeholder="clamp" value="200"/>
+            <input onchange="changeParam('laserPower',this);" type="number" placeholder="clamp" value="200"/>
         </div>
     </legend>
     <!--<legend id="export">-->
@@ -83,29 +99,50 @@
 
 <script>
 
-    var gearCenter = {x: 0, y: 0, z: 0};
 
     var gt2Constants = {
         '2': {
             'grooveDepth': 0.76,
             'pitchFactor': 0.41,
-            'pld': 0.254
+            'pld': 0.254,
+            'insideDiameter': 0.555,
+            'insideRoundDiameter': 1,
+            'outsideRoundDiameter': 0.15
         },
         '3': {
             'grooveDepth': 1.14,
-            'pitchFactor': 1.27
+            'pitchFactor': 1.27,
+            'insideDiameter': 0.555,
+            'insideRoundDiameter': 1,
+            'outsideRoundDiameter': 0.15
         },
         '5': {
             'grooveDepth': 1.93,
-            'pitchFactor': 1.78
+            'pitchFactor': 1.78,
+            'insideDiameter': 0.555,
+            'insideRoundDiameter': 1,
+            'outsideRoundDiameter': 0.15
         }
     };
 
-    var numberOfTeeth = 20;
-    var teethDiametr = 0.55;
-    var gears = [];
+
+    var settings = {
+        "numberOfTeeth": 40,
+        "centralHole": 3,
+        "numberOfRadialRoles": 4,
+        "radialHolesdiameter": 3,
+        "radialHolesDistance": 5,
+        "workSpeed": 100,
+        "speed": 100,
+        "offset": 0,
+        "laserPower": 200,
+        "gerType": gt2Constants['2']
+
+    };
+    var gearCenter = {x: 0, y: 0, z: 0};
+
+    var shapes = [];
     var camera, scene, renderer;
-    var mesh;
 
     function degToRad(angle) {
         return (angle * Math.PI) / 180;
@@ -196,7 +233,7 @@
         var angles = anglesBySideAndAngle(insideRadius + outsideRadius, outsideRadius, 90);
         var angleMargin = angles.cb;
 
-        console.log(angles);
+//        console.log(angles);
         var point;
         var a = 0;
         if (type == 'l') {
@@ -214,18 +251,31 @@
 
     function changeParam(type, el) {
 
-        if (type == 'numberOfTeeth') {
-            numberOfTeeth = parseInt(el.value);
-        } else if (type == 'teethDiametr') {
-            teethDiametr = parseFloat(el.value);
-
+        if (type == "numberOfTeeth") {
+            settings.numberOfTeeth = parseFloat(el.value);
+        } else if (type == "centralHole") {
+            settings.centralHole = parseFloat(el.value);
+        } else if (type == "numberOfRadialRoles") {
+            settings.numberOfRadialRoles = parseFloat(el.value);
+        } else if (type == "radialHolesdiameter") {
+            settings.radialHolesdiameter = parseFloat(el.value);
+        } else if (type == "radialHolesDistance") {
+            settings.radialHolesDistance = parseFloat(el.value);
+        } else if (type == "workSpeed") {
+            settings.workSpeed = parseFloat(el.value);
+        } else if (type == "speed") {
+            settings.speed = parseFloat(el.value);
+        } else if (type == "offset") {
+            settings.offset = parseFloat(el.value);
+        } else if (type == "laserPower") {
+            settings.laserPower = parseFloat(el.value);
         }
 
-        gears.forEach(function (gear) {
-            scene.remove(gear.line);
+        shapes.forEach(function (shape) {
+            scene.remove(shape.line);
         });
 
-        makeGear(numberOfTeeth, teethDiametr, 0);
+        makeGear(settings);
     }
 
     function polar(point, direct, dist) {
@@ -288,7 +338,7 @@
 
 
         scene.add(circle.line);
-        gears.push(circle);
+        shapes.push(circle);
     }
 
     function addCircle(radius, point) {
@@ -327,7 +377,7 @@
 
 
         scene.add(circle.line);
-        gears.push(circle);
+        shapes.push(circle);
     }
 
     function find_angle(p0, p1, c, debug) {
@@ -419,67 +469,15 @@
 
 
         scene.add(circle.line);
-        gears.push(circle);
+        shapes.push(circle);
 
         return circle.path[circle.path.length - 1];
 
     }
 
-    function drawArc2(path, center, radius, startAngle, endAngle) {
-
-
-        var arc = {
-            'geometry': new THREE.BufferGeometry(),
-            'material': new THREE.LineBasicMaterial({
-//            color: 0xFF0000
-                color: Math.random() * 0xFFFFFF << 0
-            }),
-            'path': [],
-            'line': null
-        };
-
-        arc.path.push(polar(center, startAngle, radius));
-        arc.path.push(polar(center, startAngle, radius));
-
-
-        arc.geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
-        var index = 0;
-
-        for (var i = 0, l = circle.path.length; i < l; i++) {
-            var positions = arc.geometry.attributes.position.array;
-            positions[index++] = arc.path[i].y;
-            positions[index++] = arc.path[i].z;
-            positions[index++] = arc.path[i].x;
-        }
-
-
-        arc.line = new THREE.Line(arc.geometry, arc.material);
-        arc.line.rotation.x = degToRad(90);
-
-
-        scene.add(arc.line);
-        gears.push(arc);
-
-        return arc.path[arc.path.length - 1];
-
-    }
-
-
-    function getCirclesSharedPoint(insidePoint, insideRadius, outsidePoint, outsideRadius) {
-        var distanse = distance(insidePoint, outsidePoint);
-        var difference = (outsideRadius - insideRadius);
-        console.log(distanse.toPrecision(2), difference.toPrecision(2));
-        if (distanse == (outsideRadius - insideRadius)) {
-
-
-        }
-
-
-    }
-
     function addAutoArc(from, to, radius) {
 
-        console.log('next shape');
+//        console.log('next shape');
         var type = radius > 0 ? 'l' : 'r';
         var i = 1;
         radius = Math.abs(radius);
@@ -487,8 +485,8 @@
         var arc = {
             'geometry': new THREE.BufferGeometry(),
             'material': new THREE.LineBasicMaterial({
-//            color: 0xFF0000
-                color: Math.random() * 0xFFFFFF << 0
+            color: 0xFF0000
+//                color: Math.random() * 0xFFFFFF << 0
             }),
             'path': [],
             'line': null
@@ -520,22 +518,12 @@
         }
 
 
-        console.log('direction', direction);
         var center = polar(from, direction, radius);
 
-        var test = polar(center, 130, 4);
-
-//        addLine(center, test, 0xFF0000);
-
-
-        var initAngleA = vectorAngle(center, from, 0);
-
-
-        console.log('initAngleA', initAngleA);
-        console.log('insideAngle', insideAngle);
+//        console.log('initAngleA', initAngleA);
+//        console.log('insideAngle', insideAngle);
         if (type == "l") {
 
-            initAngleA = initAngle;
             var addodn = vectorAngle(center, from);
 
             while (insideAngle >= 0) {
@@ -547,7 +535,6 @@
             i = 0;
             while (i <= insideAngle) {
                 arc.path.push(polar(center, i + addodn, radius));
-//                console.log(i);
                 i += 1;
             }
 
@@ -573,7 +560,7 @@
 
 
         scene.add(arc.line);
-        gears.push(arc);
+        shapes.push(arc);
 
 
         return {
@@ -589,17 +576,17 @@
     }
 
 
-    function generateTeeth(path, rootRadius, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius) {
+    function generateTeeth(config, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius) {
 
-        var roundRadius = 0.555;
-        var insideRoundRadius = 1;
-        var outsideRoundRadius = 0.25;
+        var roundRadius = config.baseConfig.gerType.insideDiameter;
+        var insideRoundRadius = config.baseConfig.gerType.insideRoundDiameter;
+        var outsideRoundRadius = config.baseConfig.gerType.outsideRoundDiameter;
 
-        var startPoint = polar(gearCenter, angle, rootRadius);
-        var teethCenter = polar(gearCenter, angle, (rootRadius + 0.555));
+        var startPoint = polar(gearCenter, angle, config.rootRadius);
+        var teethCenter = polar(gearCenter, angle, (config.rootRadius + roundRadius));
 
-        var leftInsideRoundPoint = getInsideRoundPoint(angle, rootRadius, outsideRadius, teethCenter, 'l');
-        var rightInsideRoundPoint = getInsideRoundPoint(angle, rootRadius, outsideRadius, teethCenter, 'r');
+        var leftInsideRoundPoint = getInsideRoundPoint(angle, config.rootRadius, config.outsideRadius, teethCenter, 'l');
+        var rightInsideRoundPoint = getInsideRoundPoint(angle, config.rootRadius, config.outsideRadius, teethCenter, 'r');
         var leftOutsideRoundPoint = getOutsideRoundPoint(leftInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'l');
         var rightOutsideRoundPoint = getOutsideRoundPoint(rightInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'r');
 
@@ -626,47 +613,56 @@
 
     }
 
-    function makeGear(numberOfTeeth, teethRadius, toolRadius) {
+    function makeGear(settings) {
 
-        var oneTeethAngle = (360 / numberOfTeeth);
-        var teethAngle = 0;
+        var oneTeethAngle = (360 / settings.numberOfTeeth);
 
-        var geometry = new THREE.BufferGeometry();
-        var material = new THREE.LineBasicMaterial({
-
-            color: 0xFF0000
-        });
-
-        var pitchRadius = (((2 * numberOfTeeth) / Math.PI) / 2);
+        var pitchRadius = (((2 * settings.numberOfTeeth) / Math.PI) / 2);
         var pitchDiametr = pitchRadius * 2;
-        var outsideDiameter = pitchDiametr - (0.254 * 2);
+        var outsideDiameter = pitchDiametr - (settings.gerType.pld * 2);
         var outsideRadius = outsideDiameter / 2;
-
-
-        var rootDiameter = outsideDiameter - (gt2Constants['2'].grooveDepth * 2);
+        var rootDiameter = outsideDiameter - ( settings.gerType.grooveDepth * 2);
         var rootRadius = rootDiameter / 2;
+
+
+        var teethConfig = {
+            "oneTeethAngle": oneTeethAngle,
+            "pitchRadius": pitchRadius,
+            "pitchDiametr": pitchDiametr,
+            "outsideDiameter": outsideDiameter,
+            "outsideRadius": outsideRadius,
+            "rootDiameter": rootDiameter,
+            "rootRadius": rootRadius,
+            "baseConfig": settings
+        };
+
 //        addCircle(rootRadius);
 //        addCircle(outsideRadius - 0.15);
-//        addCircle(outsideRadius);
 //        addCircle(pitchRadius);
+        addCircle(settings.centralHole / 2);
 
 //        console.log(pitchDiametr, outsideDiameter, rootDiameter);
 
-        var gear = {
-            'geometry': geometry,
-            'path': [],
-            'numberOfTeeth': numberOfTeeth,
-            'teethRadius': teethRadius,
-            'toolRadius': toolRadius,
-            'line': new THREE.Line(geometry, material)
-        };
-
         var edgePoints = [];
-        for (var i = 0; i <= numberOfTeeth;) {
-            edgePoints.push(generateTeeth(gear.path, rootRadius, teethAngle, teethRadius, toolRadius, oneTeethAngle, outsideRadius));
+        var teethAngle = 0;
+        for (var i = 0; i <= settings.numberOfTeeth;) {
+            edgePoints.push(generateTeeth(teethConfig, teethAngle));
             teethAngle += oneTeethAngle;
             i++;
         }
+
+
+        var holeAngle = 0;
+        var radialHoleCenter;
+        var oneholeAngle = 360 / settings.numberOfRadialRoles;
+        if (settings.numberOfRadialRoles >= 2) {
+            for (var i = 0; i <= settings.numberOfRadialRoles; i++) {
+                radialHoleCenter = polar(gearCenter, holeAngle, settings.radialHolesDistance);
+                addCircle(settings.radialHolesdiameter / 2, radialHoleCenter);
+                holeAngle += oneholeAngle;
+            }
+        }
+
 
         var nextPoint = null;
         var currentPoint = null;
@@ -677,12 +673,7 @@
                 addAutoArc(edgePoints[currentPoint].end, edgePoints[nextPoint].start, outsideRadius);
             }
         }
-
-
-        addPath(gear);
-        gear.line.rotation.x = degToRad(90);
-        gears.push(gear);
-        scene.add(gear.line);
+        //        addCircle(outsideRadius);
 
     }
 
@@ -690,26 +681,21 @@
 
 
 //        original 20.9;
-        camera = new THREE.PerspectiveCamera(1, window.innerWidth / window.innerHeight, 1, 1000);
+        camera = new THREE.PerspectiveCamera(3, window.innerWidth / window.innerHeight, 1, 1000);
         camera.position.z = 400;
 
         scene = new THREE.Scene();
-        var texture = new THREE.TextureLoader().load('textures/fanera.jpg');
-
-        var geometry = new THREE.RingBufferGeometry(100, 120, 1000);
-        var material = new THREE.MeshBasicMaterial({map: texture});
-        mesh = new THREE.Mesh(geometry, material);
-//        scene.add(mesh);
-
 
         renderer = new THREE.WebGLRenderer();
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-//        renderer.setSize(300, 300);
         renderer.domElement.id = "display";
         document.body.appendChild(renderer.domElement);
-        makeGear(numberOfTeeth, teethDiametr, 0);
 
+
+//        var config = {numberOfTeeth: numberOfTeeth, teethDiametr: teethDiametr, 0};
+
+        makeGear(settings);
         window.addEventListener('resize', onWindowResize, false);
 
     }
@@ -724,51 +710,16 @@
 
     init();
     animate();
-
-
-    //    mesh.rotation.x = 0.9449999999999513;
-    //    mesh.rotation.y = 1.8899999999999026;
-
-
-    //    mesh.rotation.x = 0.9449999999999513;
-    //    mesh.rotation.y = 1.8899999999999026;
-
-
-    //    mesh.rotation.x = 2.824999999999962;
-    //    mesh.rotation.y = 0.5650000000000004;
-
-    mesh.rotation.x = degToRad(90);
-    mesh.rotation.y = 0;
-
-
-    gears.forEach(function (gear) {
-        gear.line.rotation.x = degToRad(90);
-        gear.line.rotation.y = mesh.rotation.y;
-    });
-
-
-    var rotation_x = 0;
+    var rotation_x = degToRad(90);
     var rotation_y = 0;
-
 
     function animate() {
 
         requestAnimationFrame(animate);
-//        rotation_x += 0.005;
-//        rotation_y += 0.0001;
-        rotation_x = degToRad(90);
-
-
-//        mesh.rotation.x = rotation_x;
-//        mesh.rotation.y = rotation_y;
-        // console.log(mesh.rotation.x,mesh.rotation.y );
-
-        gears.forEach(function (gear) {
+        shapes.forEach(function (gear) {
             gear.line.rotation.x = rotation_x;
             gear.line.rotation.y = rotation_y;
         });
-
-
         renderer.render(scene, camera);
 
     }

@@ -49,7 +49,7 @@
 
         <div>
             <label>Number Of Teeth</label>
-            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="52"/>
+            <input type="number" placeholder="width" min="3" onchange="changeParam('numberOfTeeth',this);" value="12"/>
         </div>
         <div>
             <label>Teeth diametr, mm</label>
@@ -68,20 +68,23 @@
             <input onchange="changeSize('laserPower',this);" type="number" placeholder="clamp" value="200"/>
         </div>
     </legend>
-    <legend id="export">
-        <label for="export">Export</label>
+    <!--<legend id="export">-->
+    <!--<label for="export">Export</label>-->
 
-        <div>
-            <!--<button>DXF</button>-->
-            <!--<button>SVG</button>-->
-            <button onclick="dataExport('g-code');">G code</button>
-        </div>
-        <textarea id="g-code"></textarea>
-    </legend>
+    <!--<div>-->
+    <!--&lt;!&ndash;<button>DXF</button>&ndash;&gt;-->
+    <!--&lt;!&ndash;<button>SVG</button>&ndash;&gt;-->
+    <!--<button onclick="dataExport('g-code');">G code</button>-->
+    <!--</div>-->
+    <!--<textarea id="g-code"></textarea>-->
+    <!--</legend>-->
 </div>
 <script src="three.js"></script>
 
 <script>
+
+    var gearCenter = {x: 0, y: 0, z: 0};
+
     var gt2Constants = {
         '2': {
             'grooveDepth': 0.76,
@@ -98,7 +101,7 @@
         }
     };
 
-    var numberOfTeeth = 15;
+    var numberOfTeeth = 20;
     var teethDiametr = 0.55;
     var gears = [];
     var camera, scene, renderer;
@@ -108,6 +111,106 @@
         return (angle * Math.PI) / 180;
     }
 
+    function distance(p1, p2) {
+        var dx = p1.x - p2.x;
+        var dy = p1.y - p2.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function vectorAngle(p1, p2, zero) {
+        return Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI
+    }
+
+
+    function conver_rtg(e) {
+        return 180 / Math.PI * e
+    }
+    function conver_gtr(e) {
+        return e / (180 / Math.PI)
+    }
+
+
+    function trangleAnglesBySides(a, b, c) {
+
+        var angle_1 = 0;
+        var angle_3 = 0;
+        var angle_2 = 0;
+
+        if (a + b <= c || a + c <= b || b + c <= a) {
+            console.log('sides error');
+        } else {
+            angle_1 = conver_rtg(Math.acos((a * a + c * c - b * b) / (2 * a * c)));
+            angle_3 = conver_rtg(Math.acos((b * b + c * c - a * a) / (2 * b * c)));
+            angle_2 = 180 - angle_1 - angle_3
+        }
+
+        return {
+            'cb': angle_1,
+            'ac': angle_3,
+            'ba': angle_2
+        }
+
+    }
+
+    function getInsideRoundPoint(angle, rootRadius, outsideRadius, center, type) {
+
+        var offset = 0.4;
+        var centerRadius = 0.55;
+        var hordDistance = outsideRadius - (rootRadius + centerRadius);
+        var distance = Math.sqrt(hordDistance * hordDistance + offset * offset);
+        var angles = trangleAnglesBySides(hordDistance, distance, offset);
+        var angleMargin = angles.ba;
+        var point;
+        var a = 0;
+        if (type == 'l') {
+            a = angle + angleMargin;
+        } else if (type == 'r') {
+            a = angle - angleMargin;
+        }
+        point = polar(center, a, distance);
+        point.sharedPoint = polar(center, a - 180, centerRadius);
+        return point;
+    }
+
+
+    function anglesBySideAndAngle(a, b, y) {
+
+        var angle_2 = y;
+        var side_1 = b;
+        var side_2 = a;
+        if (180 <= angle_2) {
+            oForm.error_msg(3)
+        } else {
+            side_3 = Math.sqrt(side_2 * side_2 + side_1 * side_1 - 2 * side_2 * side_1 * Math.cos(conver_gtr(angle_2)));
+            angle_1 = conver_rtg(Math.acos((side_1 * side_1 + side_3 * side_3 - side_2 * side_2) / (2 * side_1 * side_3)));
+            angle_3 = 180 - angle_2 - angle_1
+        }
+
+        return trangleAnglesBySides(b, a, side_3);
+
+    }
+
+
+    function getOutsideRoundPoint(center, outsideRadius, insideRadius, angle, type) {
+
+        var angles = anglesBySideAndAngle(insideRadius + outsideRadius, outsideRadius, 90);
+        var angleMargin = angles.cb;
+
+        console.log(angles);
+        var point;
+        var a = 0;
+        if (type == 'l') {
+            a = angle + angleMargin;
+        } else if (type == 'r') {
+            a = angle - angleMargin;
+        }
+        point = polar(center, a - 180, insideRadius + outsideRadius);
+//        addLine(center, point);
+        point.sharedPoint = polar(center, a - 180, insideRadius);
+        point.edgeSharedPoint = polar(point, angle, outsideRadius);
+
+        return point;
+    }
 
     function changeParam(type, el) {
 
@@ -122,22 +225,20 @@
             scene.remove(gear.line);
         });
 
-
         makeGear(numberOfTeeth, teethDiametr, 0);
-
-
     }
 
-    function polar(x, y, direct, dist) {
+    function polar(point, direct, dist) {
+        direct = degToRad(direct);
         return {
-            'x': ((dist * Math.cos(direct)) + x),
-            'y': ((dist * Math.sin(direct)) + y),
+            'x': ((dist * Math.cos(direct)) + point.x),
+            'y': ((dist * Math.sin(direct)) + point.y),
             'z': 0
         }
     }
 
     function radToDeg(angle) {
-        return (angle * 180) / PI;
+        return (angle * 180) / Math.PI;
     }
 
 
@@ -154,71 +255,385 @@
     }
 
 
-    function generateTeeth(path, teethAngle, teethCenter, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius) {
+    function addLine(from, to, color) {
 
-        teethAngle = 170;
-
-
-        var angleDiff = (180 - (teethAngle)) / 2;
-
-        console.log('diff', angleDiff);
-
-
-        var teethInsideEdge = (teethAngle + angle ) + angleDiff;
-
-//        teethInsideEdge +=angleDiff;
-
-        console.log('diff', angleDiff, teethInsideEdge);
-
-
-//        console.log(teethAngle);
-//        console.log(teethInsideEdge, angle, teethInsideEdge - angle);
-
-        var roundRadius = 0.15;
-
-        console.log(degToRad(angle - oneTeethAngle), degToRad(angle - oneTeethAngle + 180));
-
-        var leftEdgePoint = polar(teethCenter.x, teethCenter.y, degToRad(teethInsideEdge + 90), teethRadius);
-        var leftCenterPoint = polar(leftEdgePoint.x, leftEdgePoint.y, degToRad(teethInsideEdge + 90), roundRadius);
-        var roundAngle = teethInsideEdge;
-        while (roundAngle < teethInsideEdge + 90) {
-            path.push(polar(leftCenterPoint.x, leftCenterPoint.y, degToRad(roundAngle + 180), roundRadius));
-            roundAngle++;
+        if (color == null) {
+            color = 0xFFFFFF;
         }
-        while (teethInsideEdge > (angle + angleDiff)) {
+        var material = new THREE.LineBasicMaterial({
+            color: color
+            // color: Math.random() * 0xFFFFFF << 0
+        });
 
-            path.push(polar(teethCenter.x, teethCenter.y, degToRad(teethInsideEdge + 90), teethRadius));
-            teethInsideEdge--;
+        var circle = {
+            'geometry': geometry,
+            'material': material,
+            'path': [from, to],
+            'line': null
+        };
+
+        var geometry = new THREE.BufferGeometry();
+        geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
+        var index = 0;
+
+        for (var i = 0, l = circle.path.length; i < l; i++) {
+            var positions = geometry.attributes.position.array;
+            positions[index++] = circle.path[i].y;
+            positions[index++] = circle.path[i].z;
+            positions[index++] = circle.path[i].x;
         }
 
-//        path.push(polar(0, 0, degToRad(angle + (oneTeethAngle / 3.3)), outsideRadius));
+        circle.line = new THREE.Line(geometry, material)
+        circle.line.rotation.x = degToRad(90);
 
 
-        var rightEdgePoint = polar(teethCenter.x, teethCenter.y, degToRad(angle + 90+ angleDiff), teethRadius);
-        var rightCenterPoint = polar(rightEdgePoint.x, rightEdgePoint.y, degToRad(angle + 90+ angleDiff), roundRadius);
-        var roundAngle = teethInsideEdge;
-        while (roundAngle < teethInsideEdge + 90) {
-            path.push(polar(rightCenterPoint.x, rightCenterPoint.y, degToRad(roundAngle - 90), roundRadius));
-            roundAngle++;
+        scene.add(circle.line);
+        gears.push(circle);
+    }
+
+    function addCircle(radius, point) {
+
+        var geometry = new THREE.BufferGeometry();
+        var material = new THREE.LineBasicMaterial();
+
+        var circle = {
+            'geometry': geometry,
+            'material': material,
+            'path': [],
+            'line': null
+        };
+
+        var angle = 0;
+        while (angle <= 360) {
+            if (point) {
+                circle.path.push(polar(point, angle, radius));
+            } else {
+                circle.path.push(polar({'x': 0, 'y': 0}, angle, radius));
+            }
+            angle++;
+        }
+        geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
+        var index = 0;
+
+        for (var i = 0, l = circle.path.length; i < l; i++) {
+            var positions = geometry.attributes.position.array;
+            positions[index++] = circle.path[i].y;
+            positions[index++] = circle.path[i].z;
+            positions[index++] = circle.path[i].x;
         }
 
-//        var roundCornerRadius = outsideRadius - 0.15;
+        circle.line = new THREE.Line(geometry, material)
+        circle.line.rotation.x = degToRad(90);
 
-//        roundCornerRadius
+
+        scene.add(circle.line);
+        gears.push(circle);
+    }
+
+    function find_angle(p0, p1, c, debug) {
+
+//        console.log(p0, p1, c);
 
 
-//        var position = {x: 0, y: 0, z: 0};
+        var p0c = Math.sqrt(Math.pow(c.x - p0.x, 2) +
+                Math.pow(c.y - p0.y, 2)); // p0->c (b)
+        var p1c = Math.sqrt(Math.pow(c.x - p1.x, 2) +
+                Math.pow(c.y - p1.y, 2)); // p1->c (a)
+        var p0p1 = Math.sqrt(Math.pow(p1.x - p0.x, 2) +
+                Math.pow(p1.y - p0.y, 2)); // p0->p1 (c)
 
+        var aa = radToDeg(Math.acos((p1c * p1c + p0c * p0c - p0p1 * p0p1) / (2 * p1c * p0c)));
+
+        if (debug) {
+            addLine(c, p1);
+            addLine(c, p0);
+
+            console.log('measured angle', aa);
+        }
+        return aa;
+    }
+
+    function extracted(teethCenter, angle, angleDiff, teethRadius, roundRadius) {
+        var rightEdgePoint = polar(teethCenter, (angle + 90 + angleDiff), teethRadius);
+        var rightCenterPoint = polar(rightEdgePoint, (angle + 90 + angleDiff), roundRadius);
+        return rightCenterPoint;
+    }
+
+
+    function drawArc(path, center, radius, angle, startAngle, direction) {
+
+
+        var geometry = new THREE.BufferGeometry();
+        var material = new THREE.LineBasicMaterial({
+//            color: 0xFF0000
+            color: Math.random() * 0xFFFFFF << 0
+        });
+
+        var circle = {
+            'geometry': geometry,
+            'material': material,
+            'path': [],
+            'line': null
+        };
+
+        var limit = 0;
+        if (direction == 'cw') {
+            limit = startAngle - angle;
+            while (startAngle >= limit) {
+                circle.path.push(polar(center, startAngle, radius));
+                startAngle -= 0.1;
+            }
+            circle.path.push(polar(center, startAngle, radius));
+            console.log('final angle', limit);
+
+
+        } else {
+            limit = startAngle + angle;
+            while (startAngle <= limit) {
+                circle.path.push(polar(center, startAngle, radius));
+                startAngle += 0.1;
+            }
+            circle.path.push(polar(center, startAngle, radius));
+            console.log('final angle', startAngle);
+
+
+        }
+
+        var geometry = new THREE.BufferGeometry();
+        geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
+        var index = 0;
+
+        for (var i = 0, l = circle.path.length; i < l; i++) {
+            var positions = geometry.attributes.position.array;
+            positions[index++] = circle.path[i].y;
+            positions[index++] = circle.path[i].z;
+            positions[index++] = circle.path[i].x;
+        }
+
+
+//        addLine(circle.path[0], center);
+//        addLine(circle.path[circle.path.length - 1], center);
+
+        circle.line = new THREE.Line(geometry, material);
+        circle.line.rotation.x = degToRad(90);
+
+
+        scene.add(circle.line);
+        gears.push(circle);
+
+        return circle.path[circle.path.length - 1];
+
+    }
+
+    function drawArc2(path, center, radius, startAngle, endAngle) {
+
+
+        var arc = {
+            'geometry': new THREE.BufferGeometry(),
+            'material': new THREE.LineBasicMaterial({
+//            color: 0xFF0000
+                color: Math.random() * 0xFFFFFF << 0
+            }),
+            'path': [],
+            'line': null
+        };
+
+        arc.path.push(polar(center, startAngle, radius));
+        arc.path.push(polar(center, startAngle, radius));
+
+
+        arc.geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
+        var index = 0;
+
+        for (var i = 0, l = circle.path.length; i < l; i++) {
+            var positions = arc.geometry.attributes.position.array;
+            positions[index++] = arc.path[i].y;
+            positions[index++] = arc.path[i].z;
+            positions[index++] = arc.path[i].x;
+        }
+
+
+        arc.line = new THREE.Line(arc.geometry, arc.material);
+        arc.line.rotation.x = degToRad(90);
+
+
+        scene.add(arc.line);
+        gears.push(arc);
+
+        return arc.path[arc.path.length - 1];
+
+    }
+
+
+    function getCirclesSharedPoint(insidePoint, insideRadius, outsidePoint, outsideRadius) {
+        var distanse = distance(insidePoint, outsidePoint);
+        var difference = (outsideRadius - insideRadius);
+        console.log(distanse.toPrecision(2), difference.toPrecision(2));
+        if (distanse == (outsideRadius - insideRadius)) {
+
+
+        }
+
+
+    }
+
+    function addAutoArc(from, to, radius) {
+
+        console.log('next shape');
+        var type = radius > 0 ? 'l' : 'r';
+        var i = 1;
+        radius = Math.abs(radius);
+
+        var arc = {
+            'geometry': new THREE.BufferGeometry(),
+            'material': new THREE.LineBasicMaterial({
+//            color: 0xFF0000
+                color: Math.random() * 0xFFFFFF << 0
+            }),
+            'path': [],
+            'line': null
+        };
+
+//        addLine(from, to);
+
+        var distanse = distance(from, to);
+        var angles = trangleAnglesBySides(radius, radius, distanse);
+
+        if (angles.ac == 0) {
+            console.warn('minimum shape radius:' + (distanse / 2) + ' given:' + radius);
+            return
+        }
+
+//        console.log(angles, radius, radius, distanse);
+
+        var insideAngle = angles.ba;
+        var shiftAngle = angles.ac;
+
+        var initAngle = vectorAngle(from, to);
+
+        var direction = 0;
+        if (type == "l") {
+            direction = initAngle + shiftAngle;
+        }
+        else {
+            direction = initAngle - shiftAngle;
+        }
+
+
+        console.log('direction', direction);
+        var center = polar(from, direction, radius);
+
+        var test = polar(center, 130, 4);
+
+//        addLine(center, test, 0xFF0000);
+
+
+        var initAngleA = vectorAngle(center, from, 0);
+
+
+        console.log('initAngleA', initAngleA);
+        console.log('insideAngle', insideAngle);
+        if (type == "l") {
+
+            initAngleA = initAngle;
+            var addodn = vectorAngle(center, from);
+
+            while (insideAngle >= 0) {
+                arc.path.push(polar(center, insideAngle + addodn, radius));
+                insideAngle -= 0.1;
+            }
+        } else {
+            var addodn = vectorAngle(center, to);
+            i = 0;
+            while (i <= insideAngle) {
+                arc.path.push(polar(center, i + addodn, radius));
+//                console.log(i);
+                i += 1;
+            }
+
+        }
+
+//        addLine(center, to, 0x00FF00);
+//        addLine(from, center, 0x0000FF);
+
+
+        arc.geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(arc.path.length * 3), 3));
+        var index = 0;
+
+        for (var i = 0, l = arc.path.length; i < l; i++) {
+            var positions = arc.geometry.attributes.position.array;
+            positions[index++] = arc.path[i].y;
+            positions[index++] = arc.path[i].z;
+            positions[index++] = arc.path[i].x;
+        }
+
+
+        arc.line = new THREE.Line(arc.geometry, arc.material);
+//        arc.line.rotation.x = degToRad(90);
+
+
+        scene.add(arc.line);
+        gears.push(arc);
+
+
+        return {
+            'gcode': '',
+            'form': from,
+            'to': to,
+            'center': center
+
+        };
+
+
+        console.log(distanse, angles);
+    }
+
+
+    function generateTeeth(path, rootRadius, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius) {
+
+        var roundRadius = 0.555;
+        var insideRoundRadius = 1;
+        var outsideRoundRadius = 0.25;
+
+        var startPoint = polar(gearCenter, angle, rootRadius);
+        var teethCenter = polar(gearCenter, angle, (rootRadius + 0.555));
+
+        var leftInsideRoundPoint = getInsideRoundPoint(angle, rootRadius, outsideRadius, teethCenter, 'l');
+        var rightInsideRoundPoint = getInsideRoundPoint(angle, rootRadius, outsideRadius, teethCenter, 'r');
+        var leftOutsideRoundPoint = getOutsideRoundPoint(leftInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'l');
+        var rightOutsideRoundPoint = getOutsideRoundPoint(rightInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'r');
+
+        addAutoArc(startPoint, leftInsideRoundPoint.sharedPoint, roundRadius);
+        addAutoArc(startPoint, rightInsideRoundPoint.sharedPoint, roundRadius * -1);
+
+        addAutoArc(leftInsideRoundPoint.sharedPoint, leftOutsideRoundPoint.sharedPoint, insideRoundRadius);
+        addAutoArc(rightInsideRoundPoint.sharedPoint, rightOutsideRoundPoint.sharedPoint, insideRoundRadius * -1);
+        addAutoArc(leftOutsideRoundPoint.sharedPoint, leftOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius * -1);
+        addAutoArc(rightOutsideRoundPoint.sharedPoint, rightOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius);
+
+//        addCircle(insideRoundRadius, leftInsideRoundPoint);
+//        addCircle(insideRoundRadius, rightInsideRoundPoint);
+//        addCircle(outsideRoundRadius, leftOutsideRoundPoint);
+//        addCircle(outsideRoundRadius, rightOutsideRoundPoint);
+//        addCircle(roundRadius, teethCenter);
+
+
+        return {
+            'start': leftOutsideRoundPoint.edgeSharedPoint,
+            'end': rightOutsideRoundPoint.edgeSharedPoint
+
+        }
 
     }
 
     function makeGear(numberOfTeeth, teethRadius, toolRadius) {
 
         var oneTeethAngle = (360 / numberOfTeeth);
-        var angle = 0;
+        var teethAngle = 0;
 
         var geometry = new THREE.BufferGeometry();
         var material = new THREE.LineBasicMaterial({
+
             color: 0xFF0000
         });
 
@@ -230,8 +645,12 @@
 
         var rootDiameter = outsideDiameter - (gt2Constants['2'].grooveDepth * 2);
         var rootRadius = rootDiameter / 2;
+//        addCircle(rootRadius);
+//        addCircle(outsideRadius - 0.15);
+//        addCircle(outsideRadius);
+//        addCircle(pitchRadius);
 
-        console.log(pitchDiametr, outsideDiameter, rootDiameter);
+//        console.log(pitchDiametr, outsideDiameter, rootDiameter);
 
         var gear = {
             'geometry': geometry,
@@ -242,63 +661,26 @@
             'line': new THREE.Line(geometry, material)
         };
 
-        var teethInsideAngle = ((180 - ((oneTeethAngle / 2) + 90)) * 2);
-        teethInsideAngle = 180;
-
-
-        //0.366
-//        console.log(oneTeethAngle, teethInsideAngle);
-        var teethCenter;
-        var teethCenter;
-        var outsidePoint;
+        var edgePoints = [];
         for (var i = 0; i <= numberOfTeeth;) {
-
-//            outsidePoint = polar(0, 0, degToRad(angle - (oneTeethAngle / 3)), outsideRadius);
-//            gear.path.push(outsidePoint);
-
-            teethCenter = polar(0, 0, degToRad(angle), (rootRadius + 0.555));
-            generateTeeth(gear.path, teethInsideAngle, teethCenter, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius);
-
-//            outsidePoint = polar(0, 0, degToRad(angle + (oneTeethAngle / 3)), outsideRadius);
-//            gear.path.push(outsidePoint);
-
-
-//            gear.path.push(teethCenter);
-            angle += oneTeethAngle;
-            i++;
-        }
-        angle = 0;
-        for (var i = 0; i <= 360;) {
-//            polar(0, 0, teethCenter, 300);
-            teethCenter = polar(0, 0, degToRad(i), outsideDiameter / 2);
-//            gear.path.push(teethCenter);
-            angle += oneTeethAngle;
+            edgePoints.push(generateTeeth(gear.path, rootRadius, teethAngle, teethRadius, toolRadius, oneTeethAngle, outsideRadius));
+            teethAngle += oneTeethAngle;
             i++;
         }
 
-        angle = 0;
-//        for (var i = 0; i <= 360;) {
-////            polar(0, 0, teethCenter, 300);
-//            teethCenter = polar(0, 0, degToRad(angle), pitchDiametr/2);
-//            gear.path.push(teethCenter);
-//            teethCenter = polar(0, 0, degToRad(angle), 2);
-//            gear.path.push(teethCenter);
-//            angle += oneTeethAngle;
-//            i++;
-//        }
-
-//        console.log(path);
-
-
-        for (var i = 0; i <= 360; i++) {
-
-            outsidePoint = polar(0, 0, degToRad(i), 3 / 2);
-            gear.path.push(outsidePoint);
+        var nextPoint = null;
+        var currentPoint = null;
+        for (var i = 0; i < edgePoints.length; i++) {
+            nextPoint = i + 1;
+            currentPoint = i;
+            if (nextPoint != edgePoints.length) {
+                addAutoArc(edgePoints[currentPoint].end, edgePoints[nextPoint].start, outsideRadius);
+            }
         }
+
 
         addPath(gear);
-//        gear.line.geometry.translate(-(width / 2), -(depth / 2), (height / 2));
-
+        gear.line.rotation.x = degToRad(90);
         gears.push(gear);
         scene.add(gear.line);
 
@@ -360,7 +742,7 @@
 
 
     gears.forEach(function (gear) {
-        gear.line.rotation.x = mesh.rotation.x;
+        gear.line.rotation.x = degToRad(90);
         gear.line.rotation.y = mesh.rotation.y;
     });
 
@@ -377,8 +759,8 @@
         rotation_x = degToRad(90);
 
 
-        mesh.rotation.x = rotation_x;
-        mesh.rotation.y = rotation_y;
+//        mesh.rotation.x = rotation_x;
+//        mesh.rotation.y = rotation_y;
         // console.log(mesh.rotation.x,mesh.rotation.y );
 
         gears.forEach(function (gear) {

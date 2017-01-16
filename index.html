@@ -84,20 +84,46 @@
             <input onchange="changeParam('laserPower',this);" type="number" placeholder="clamp" value="200"/>
         </div>
     </legend>
-    <!--<legend id="export">-->
-    <!--<label for="export">Export</label>-->
+    <legend id="export">
+        <label for="export">Export</label>
 
-    <!--<div>-->
-    <!--&lt;!&ndash;<button>DXF</button>&ndash;&gt;-->
-    <!--&lt;!&ndash;<button>SVG</button>&ndash;&gt;-->
-    <!--<button onclick="dataExport('g-code');">G code</button>-->
-    <!--</div>-->
-    <!--<textarea id="g-code"></textarea>-->
-    <!--</legend>-->
+        <div>
+            <!--<button>DXF</button>-->
+            <!--<button>SVG</button>-->
+            <button onclick="dataExport('g-code');">G code</button>
+        </div>
+        <textarea id="g-code"></textarea>
+    </legend>
 </div>
 <script src="three.js"></script>
 
 <script>
+
+
+    var gcodeExporter = {
+        'circle': function (shape) {
+            var str = "";
+            var ofx = shape.center.x - shape.radius;
+            str += "(circle x=" + shape.center.x + " y=" + shape.center.y + " radius=" + shape.radius + ")\n";
+            str += "G0 X" + ofx.toFixed(3) + " Y" + shape.center.y.toFixed(3) + " (rapid to start)\n";
+            str += "G17 G2 X" + ofx.toFixed(3) + " Y" + shape.center.y.toFixed(3) + " I" + shape.radius.toFixed(3) + " J0.000\n";
+
+            str += "(end of circle)\n\n";
+            return str;
+        },
+        'arc': function (shape) {
+            var Theta1 = vectorAngle(shape.center, shape.from);
+            var I = (shape.center.x - (Math.abs(shape.radius) * Math.cos(Theta1 * Math.PI / 180))) - shape.center.x;
+            var J = (shape.center.y - (Math.abs(shape.radius) * Math.sin(Theta1 * Math.PI / 180))) - shape.center.y;
+
+            return "G0 X" + shape.from.x.toFixed(3) + " Y" + shape.from.y.toFixed(3) + "\n" +
+                    (shape.radius > 0 ? "G3" : "G2") + " X" + shape.to.x.toFixed(3) + " Y" + shape.to.y.toFixed(3) + "  I" + I.toFixed(3) + " J" + J.toFixed(3) + "\n";
+
+        },
+        'line': function (shape) {
+            return "";
+        }
+    };
 
 
     var gt2Constants = {
@@ -154,8 +180,56 @@
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    function vectorAngle(p1, p2, zero) {
+    function vectorAngle(p1, p2) {
         return Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI
+    }
+
+    function pointToFixed(p) {
+
+        var x = p.x;
+        var y = p.y;
+
+        return {'x': x.toFixed(3), 'y': y.toFixed(3)};
+
+    }
+
+
+    function dataExport(type) {
+        textarea.value = "";
+        var offsetX = 0;
+        var offsetY = 0;
+        var exporter = {};
+
+        if (type == 'g-code') {
+            exporter = gcodeExporter;
+
+            textarea.value += "G90\n";
+            textarea.value += "S" + settings.laserPower + "\n";
+            textarea.value += "F" + settings.workSpeed + "\n";
+            textarea.value += "G0 X0.000 Y0.000\n";
+
+            var p1, p2;
+            shapes.forEach(function (shape, index) {
+
+//                textarea.value += "M5\n";
+
+                textarea.value += exporter[shape.type](shape);
+
+//                textarea.value += "F" + settings.speed + "\n";
+
+            });
+            textarea.value += "G0 X0.000 Y0.000\n";
+            textarea.value += "M2\n";
+        }
+    }
+    var textarea = document.getElementById('g-code');
+
+    function exportShapeGcode(shape) {
+
+
+        textarea.value += shape.type + "\n";
+
+
     }
 
 
@@ -310,30 +384,31 @@
         if (color == null) {
             color = 0xFFFFFF;
         }
-        var material = new THREE.LineBasicMaterial({
-            color: color
-            // color: Math.random() * 0xFFFFFF << 0
-        });
 
         var circle = {
-            'geometry': geometry,
-            'material': material,
+            'type': 'line',
+            'from': from,
+            'to': to,
+            'geometry': new THREE.BufferGeometry(),
+            'material': new THREE.LineBasicMaterial({
+                color: color
+                // color: Math.random() * 0xFFFFFF << 0
+            }),
             'path': [from, to],
             'line': null
         };
 
-        var geometry = new THREE.BufferGeometry();
-        geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
+        circle.geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(circle.path.length * 3), 3));
         var index = 0;
 
         for (var i = 0, l = circle.path.length; i < l; i++) {
-            var positions = geometry.attributes.position.array;
+            var positions = circle.geometry.attributes.position.array;
             positions[index++] = circle.path[i].y;
             positions[index++] = circle.path[i].z;
             positions[index++] = circle.path[i].x;
         }
 
-        circle.line = new THREE.Line(geometry, material)
+        circle.line = new THREE.Line(circle.geometry, circle.material)
         circle.line.rotation.x = degToRad(90);
 
 
@@ -347,6 +422,9 @@
         var material = new THREE.LineBasicMaterial();
 
         var circle = {
+            'type': 'circle',
+            'center': point,
+            'radius': radius,
             'geometry': geometry,
             'material': material,
             'path': [],
@@ -379,36 +457,6 @@
         scene.add(circle.line);
         shapes.push(circle);
     }
-
-    function find_angle(p0, p1, c, debug) {
-
-//        console.log(p0, p1, c);
-
-
-        var p0c = Math.sqrt(Math.pow(c.x - p0.x, 2) +
-                Math.pow(c.y - p0.y, 2)); // p0->c (b)
-        var p1c = Math.sqrt(Math.pow(c.x - p1.x, 2) +
-                Math.pow(c.y - p1.y, 2)); // p1->c (a)
-        var p0p1 = Math.sqrt(Math.pow(p1.x - p0.x, 2) +
-                Math.pow(p1.y - p0.y, 2)); // p0->p1 (c)
-
-        var aa = radToDeg(Math.acos((p1c * p1c + p0c * p0c - p0p1 * p0p1) / (2 * p1c * p0c)));
-
-        if (debug) {
-            addLine(c, p1);
-            addLine(c, p0);
-
-            console.log('measured angle', aa);
-        }
-        return aa;
-    }
-
-    function extracted(teethCenter, angle, angleDiff, teethRadius, roundRadius) {
-        var rightEdgePoint = polar(teethCenter, (angle + 90 + angleDiff), teethRadius);
-        var rightCenterPoint = polar(rightEdgePoint, (angle + 90 + angleDiff), roundRadius);
-        return rightCenterPoint;
-    }
-
 
     function drawArc(path, center, radius, angle, startAngle, direction) {
 
@@ -446,7 +494,6 @@
             circle.path.push(polar(center, startAngle, radius));
             console.log('final angle', startAngle);
 
-
         }
 
         var geometry = new THREE.BufferGeometry();
@@ -475,22 +522,30 @@
 
     }
 
-    function addAutoArc(from, to, radius) {
+    function addArc(from, to, radius) {
 
 //        console.log('next shape');
         var type = radius > 0 ? 'l' : 'r';
         var i = 1;
-        radius = Math.abs(radius);
 
         var arc = {
+            'type': 'arc',
+            'from': from,
+            'to': to,
+            'radius': radius,
+            'gcode': '',
+            'center': null,
             'geometry': new THREE.BufferGeometry(),
             'material': new THREE.LineBasicMaterial({
-            color: 0xFF0000
+                color: 0xFF0000
 //                color: Math.random() * 0xFFFFFF << 0
             }),
             'path': [],
             'line': null
         };
+
+        radius = Math.abs(radius);
+
 
 //        addLine(from, to);
 
@@ -501,8 +556,6 @@
             console.warn('minimum shape radius:' + (distanse / 2) + ' given:' + radius);
             return
         }
-
-//        console.log(angles, radius, radius, distanse);
 
         var insideAngle = angles.ba;
         var shiftAngle = angles.ac;
@@ -517,31 +570,24 @@
             direction = initAngle - shiftAngle;
         }
 
-
-        var center = polar(from, direction, radius);
-
-//        console.log('initAngleA', initAngleA);
-//        console.log('insideAngle', insideAngle);
+        arc.center = polar(from, direction, radius);
         if (type == "l") {
-
-            var addodn = vectorAngle(center, from);
-
+            var addodn = vectorAngle(arc.center, from);
             while (insideAngle >= 0) {
-                arc.path.push(polar(center, insideAngle + addodn, radius));
+                arc.path.push(polar(arc.center, insideAngle + addodn, radius));
                 insideAngle -= 0.1;
             }
         } else {
-            var addodn = vectorAngle(center, to);
+            var addodn = vectorAngle(arc.center, to);
             i = 0;
             while (i <= insideAngle) {
-                arc.path.push(polar(center, i + addodn, radius));
+                arc.path.push(polar(arc.center, i + addodn, radius));
                 i += 1;
             }
-
         }
-
-//        addLine(center, to, 0x00FF00);
-//        addLine(from, center, 0x0000FF);
+//
+//        addLine(arc.center, to, 0x00FF00);
+//        addLine(from, arc.center, 0x0000FF);
 
 
         arc.geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(arc.path.length * 3), 3));
@@ -564,19 +610,18 @@
 
 
         return {
-            'gcode': '',
-            'form': from,
+            'from': from,
             'to': to,
-            'center': center
-
+            'radius': radius,
+            'gcode': '',
+            'center': arc.center
         };
-
 
         console.log(distanse, angles);
     }
 
 
-    function generateTeeth(config, angle, teethRadius, toolRadius, oneTeethAngle, outsideRadius) {
+    function generateTeeth(config, angle, nextteeth) {
 
         var roundRadius = config.baseConfig.gerType.insideDiameter;
         var insideRoundRadius = config.baseConfig.gerType.insideRoundDiameter;
@@ -590,19 +635,27 @@
         var leftOutsideRoundPoint = getOutsideRoundPoint(leftInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'l');
         var rightOutsideRoundPoint = getOutsideRoundPoint(rightInsideRoundPoint, outsideRoundRadius, insideRoundRadius, angle, 'r');
 
-        addAutoArc(startPoint, leftInsideRoundPoint.sharedPoint, roundRadius);
-        addAutoArc(startPoint, rightInsideRoundPoint.sharedPoint, roundRadius * -1);
+        if (nextteeth) {
+            addArc(leftOutsideRoundPoint.edgeSharedPoint, leftOutsideRoundPoint.sharedPoint, outsideRoundRadius);
 
-        addAutoArc(leftInsideRoundPoint.sharedPoint, leftOutsideRoundPoint.sharedPoint, insideRoundRadius);
-        addAutoArc(rightInsideRoundPoint.sharedPoint, rightOutsideRoundPoint.sharedPoint, insideRoundRadius * -1);
-        addAutoArc(leftOutsideRoundPoint.sharedPoint, leftOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius * -1);
-        addAutoArc(rightOutsideRoundPoint.sharedPoint, rightOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius);
+            addArc(leftOutsideRoundPoint.sharedPoint, leftInsideRoundPoint.sharedPoint, insideRoundRadius * -1);
+            addArc(leftInsideRoundPoint.sharedPoint, startPoint, roundRadius * -1);
+            addArc(startPoint, rightInsideRoundPoint.sharedPoint, roundRadius * -1);
+            addArc(rightInsideRoundPoint.sharedPoint, rightOutsideRoundPoint.sharedPoint, insideRoundRadius * -1);
+//            addArc(rightOutsideRoundPoint.sharedPoint, rightOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius);
+
+            addArc(rightOutsideRoundPoint.sharedPoint, rightOutsideRoundPoint.edgeSharedPoint, outsideRoundRadius);
+
+            addArc(rightOutsideRoundPoint.edgeSharedPoint, nextteeth.start, config.outsideRadius * -1);
 
 //        addCircle(insideRoundRadius, leftInsideRoundPoint);
 //        addCircle(insideRoundRadius, rightInsideRoundPoint);
 //        addCircle(outsideRoundRadius, leftOutsideRoundPoint);
 //        addCircle(outsideRoundRadius, rightOutsideRoundPoint);
 //        addCircle(roundRadius, teethCenter);
+
+
+        }
 
 
         return {
@@ -625,6 +678,13 @@
         var rootRadius = rootDiameter / 2;
 
 
+        gearCenter.x = pitchRadius;
+        gearCenter.y = pitchRadius;
+
+        camera.position.x = pitchRadius;
+        camera.position.y = -pitchRadius;
+
+
         var teethConfig = {
             "oneTeethAngle": oneTeethAngle,
             "pitchRadius": pitchRadius,
@@ -639,14 +699,21 @@
 //        addCircle(rootRadius);
 //        addCircle(outsideRadius - 0.15);
 //        addCircle(pitchRadius);
-        addCircle(settings.centralHole / 2);
+        addCircle(settings.centralHole / 2, gearCenter);
 
 //        console.log(pitchDiametr, outsideDiameter, rootDiameter);
 
         var edgePoints = [];
         var teethAngle = 0;
-        for (var i = 0; i <= settings.numberOfTeeth;) {
-            edgePoints.push(generateTeeth(teethConfig, teethAngle));
+
+        var nextTeetch
+        for (var i = 0; i < settings.numberOfTeeth;) {
+            nextTeetch = null;
+            if (teethAngle + oneTeethAngle < 360) {
+            }
+            nextTeetch = generateTeeth(teethConfig, teethAngle + oneTeethAngle);
+
+            edgePoints.push(generateTeeth(teethConfig, teethAngle, nextTeetch));
             teethAngle += oneTeethAngle;
             i++;
         }
@@ -670,11 +737,10 @@
             nextPoint = i + 1;
             currentPoint = i;
             if (nextPoint != edgePoints.length) {
-                addAutoArc(edgePoints[currentPoint].end, edgePoints[nextPoint].start, outsideRadius);
+//                addArc(edgePoints[currentPoint].end, edgePoints[nextPoint].start, outsideRadius);
             }
         }
         //        addCircle(outsideRadius);
-
     }
 
     function init() {
@@ -692,6 +758,13 @@
         renderer.domElement.id = "display";
         document.body.appendChild(renderer.domElement);
         makeGear(settings);
+
+
+//        addArc({x: 2.25, y: 3.5,'z':0}, {x: 2.75, y: 3,'z':0}, -0.5);
+//        addArc({x: 0.5, y: -2,'z':0}, {x: -0.5, y: -2,'z':0}, -0.5);
+//        addArc({x:3,y:0},{x:-3,y:0},3);
+//        addArc({x:-3,y:0},{x:-3,y:3},-3);
+
         window.addEventListener('resize', onWindowResize, false);
 
     }
@@ -725,13 +798,24 @@
 <!--integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="-->
 <!--crossorigin="anonymous"></script>-->
 <script>
-    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-                (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-            m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r;
+        i[r] = i[r] || function () {
+                    (i[r].q = i[r].q || []).push(arguments)
+                }, i[r].l = 1 * new Date();
+        a = s.createElement(o),
+                m = s.getElementsByTagName(o)[0];
+        a.async = 1;
+        a.src = g;
+        m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', 'https://www.google-analytics.com/analytics.js', 'ga');
 
     ga('create', 'UA-90392164-1', 'auto');
     ga('send', 'pageview');
+
+    var a = Math.cos(90 * Math.PI / 180).toFixed(15);
+
+    console.log(a);
 
 </script>
 </body>

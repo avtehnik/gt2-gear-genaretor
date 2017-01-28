@@ -96,7 +96,7 @@
         <label for="export">Export</label>
 
         <div>
-            <!--<button>DXF</button>-->
+            <button onclick="dataExport('dxf');">DXF</button>
             <!--<button>SVG</button>-->
             <button onclick="dataExport('g-code');">G code</button>
         </div>
@@ -104,6 +104,7 @@
     </legend>
 </div>
 <script src="js/three.js"></script>
+<script src="js/dxf.js"></script>
 
 <script>
 
@@ -130,6 +131,18 @@
             str += "M5\n";
             return str;
 
+
+        },
+        'line': function (shape, settings) {
+            return "";
+        }
+    };
+    var dxfExporterProxy = {
+        'circle': function (shape, settings) {
+            DxfExporter.addCircle(shape.center, shape.radius);
+        },
+        'arc': function (shape, settings) {
+            DxfExporter.addArc(shape.center, shape.radius, shape.startAngle, shape.endAngle);
 
         },
         'line': function (shape, settings) {
@@ -272,6 +285,15 @@
             });
             textarea.value += "G0 X0.000 Y0.000\n";
             textarea.value += "M2\n";
+        } else if (type == 'dxf') {
+            DxfExporter.reset();
+            exporter = dxfExporterProxy;
+            shapesForExport.forEach(function (shape) {
+                exporter[shape.type](shape, settings);
+            });
+
+            textarea.value = DxfExporter.export();
+
         }
     }
     var textarea = document.getElementById('g-code');
@@ -490,12 +512,16 @@
         var type = radius > 0 ? 'l' : 'r';
         var i = 1;
 
+        radius = Math.abs(radius);
+
         var arc = {
             'type': 'arc',
             'from': from,
             'to': to,
             'radius': radius,
             'gcode': '',
+            'startAngle': 0,
+            'endAngle': 0,
             'center': null,
             'geometry': new THREE.BufferGeometry(),
             'material': new THREE.LineBasicMaterial({
@@ -505,7 +531,6 @@
             'line': null
         };
 
-        radius = Math.abs(radius);
 
 
 //        addLine(from, to);
@@ -532,13 +557,21 @@
         }
 
         arc.center = polar(from, direction, radius);
+
+
         if (type == "l") {
+            arc.startAngle = vectorAngle(arc.center, from);
+            arc.endAngle = vectorAngle(arc.center, to);
+
             var addodn = vectorAngle(arc.center, from);
             while (insideAngle >= 0) {
                 arc.path.push(polar(arc.center, insideAngle + addodn, radius));
                 insideAngle -= 0.1;
             }
         } else {
+            arc.endAngle = vectorAngle(arc.center, from);
+            arc.startAngle = vectorAngle(arc.center, to);
+
             var addodn = vectorAngle(arc.center, to);
             i = 0;
             while (i <= insideAngle) {

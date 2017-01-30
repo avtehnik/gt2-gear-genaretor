@@ -1,4 +1,4 @@
-# GT2 gear genaretor
+# GT2 gear genarator
 
 https://avtehnik.github.io/gt2-gear-genaretor/
 

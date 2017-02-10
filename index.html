@@ -143,7 +143,7 @@
             DxfExporter.addCircle(shape.center, shape.radius);
         },
         'arc': function (shape, settings) {
-            DxfExporter.addArc(shape.center, shape.radius, shape.startAngle, shape.endAngle);
+            DxfExporter.addArc(shape.center, Math.abs(shape.radius), shape.startAngle, shape.endAngle);
 
         },
         'line': function (shape, settings) {
@@ -513,7 +513,6 @@
         var type = radius > 0 ? 'l' : 'r';
         var i = 1;
 
-        radius = Math.abs(radius);
 
         var arc = {
             'type': 'arc',
@@ -532,6 +531,7 @@
             'line': null
         };
 
+        radius = Math.abs(radius);
 
 
 //        addLine(from, to);

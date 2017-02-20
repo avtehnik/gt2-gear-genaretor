@@ -5,6 +5,7 @@
 DxfExporter = {
     file: [],
     reset: function () {
+        DxfExporter.clean();
         DxfExporter.file.push(0);
         DxfExporter.file.push("SECTION");
         DxfExporter.file.push(2);
@@ -81,6 +82,10 @@ DxfExporter = {
         shape.push(51);
         shape.push(endAngle);
         DxfExporter.file.push(shape.join("\n"));
+    },
+
+    clean: function () {
+        DxfExporter.file = [];
     },
 
     export: function () {

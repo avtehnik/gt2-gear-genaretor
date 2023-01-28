@@ -705,7 +705,7 @@
         var radialHoleCenter;
         var oneholeAngle = 360 / settings.numberOfRadialRoles;
         if (settings.numberOfRadialRoles >= 2) {
-            for (var i = 0; i <= settings.numberOfRadialRoles; i++) {
+            for (var i = 0; i < settings.numberOfRadialRoles; i++) {
                 radialHoleCenter = polar(gearCenter, holeAngle, settings.radialHolesDistance);
                 shapesForExport.push(addCircle((settings.radialHolesdiameter - (settings.toolOffset * 2)) / 2, radialHoleCenter));
                 holeAngle += oneholeAngle;
